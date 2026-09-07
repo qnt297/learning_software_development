@@ -1,0 +1,78 @@
+# 研修用実行環境（Eclipse ホスト + Docker ランタイム）
+#
+# 起動:
+#   cd docker
+#   docker compose up -d --build
+#
+# 停止:
+#   docker compose down
+
+name: learning-software-development
+
+services:
+  # --- DB 教材用 (PostgreSQL) ---
+  postgres:
+    image: postgres:16
+    container_name: lsd-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trainee}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trainee}
+      POSTGRES_DB: ${POSTGRES_DB:-learning_shop}
+      TZ: Asia/Tokyo
+    ports:
+      # ホストの Eclipse / DBeaver / psql から接続
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 初回起動時のみ実行される初期化 SQL（教材の shop スキーマ）
+      - ../db/samples/shop/00_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ../db/samples/shop/01_seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trainee} -d ${POSTGRES_DB:-learning_shop}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # --- Java 実行環境（JDK 17 + Maven + SSH） ---
+  # Eclipse 本体はホスト側。コンテナへは SSH または共有フォルダで接続する。
+  java-dev:
+    build:
+      context: ./java-dev
+      dockerfile: Dockerfile
+    container_name: lsd-java-dev
+    restart: unless-stopped
+    hostname: java-dev
+    environment:
+      TRAINEE_PASSWORD: ${TRAINEE_PASSWORD:-trainee}
+      # コンテナ内から DB へ（サービス名で名前解決）
+      JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-learning_shop}
+      JDBC_USER: ${POSTGRES_USER:-trainee}
+      JDBC_PASSWORD: ${POSTGRES_PASSWORD:-trainee}
+      TZ: Asia/Tokyo
+    ports:
+      # Eclipse Remote / 普通の SSH クライアント用
+      - "${SSH_PORT:-2222}:22"
+    volumes:
+      # リポジトリ全体をマウント（ホストの Eclipse と同じソースを参照可能）
+      - ..:/workspace
+    working_dir: /workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # --- SQL 確認用 Web UI（任意だが研修では便利） ---
+  adminer:
+    image: adminer:4
+    container_name: lsd-adminer
+    restart: unless-stopped
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
