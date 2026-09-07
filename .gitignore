@@ -1,6 +1,10 @@
 # Compiled class file
 *.class
 
+# Sample runtime outputs
+java/samples/**/out/
+java/samples/**/tasks-data/
+
 # Log file
 *.log
 
