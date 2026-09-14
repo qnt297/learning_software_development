@@ -34,13 +34,14 @@ javac 04-exceptions/com/example/exceptions/*.java
 java com.example.exceptions.ExceptionDemo
 ```
 
-## ロードマップ（全12章）
+## ロードマップ（全13章）
 
 | # | 章 | 教材 | サンプル | 到達目標 |
 |---|----|------|----------|----------|
-| 01 | 基礎文法 | [lessons/01-basics.md](lessons/01-basics.md) | [samples/01-basics](samples/01-basics) | 変数・制御構文・メソッドで小さなプログラムを書く |
+| 00 | 実行の仕組み | [lessons/00-runtime.md](lessons/00-runtime.md) | [samples/00-runtime](samples/00-runtime) | JVM・ヒープ・スコープ・main の意味を説明できる |
+| 01 | 基礎文法 | [lessons/01-basics.md](lessons/01-basics.md) | [samples/01-basics](samples/01-basics) | 変数・if/for/switch/break・メソッドで小さなプログラムを書く |
 | 02 | オブジェクト指向 | [lessons/02-oop.md](lessons/02-oop.md) | [samples/02-oop](samples/02-oop) | クラス・継承・IF・アノテーション |
-| 03 | コレクションとジェネリクス | [lessons/03-collections.md](lessons/03-collections.md) | [samples/03-collections](samples/03-collections) | List/Map/Set を型安全に扱う |
+| 03 | コレクションとジェネリクス | [lessons/03-collections.md](lessons/03-collections.md) | [samples/03-collections](samples/03-collections) | 配列・List/Map/Set・Iterator |
 | 04 | 例外処理 | [lessons/04-exceptions.md](lessons/04-exceptions.md) | [samples/04-exceptions](samples/04-exceptions) | 失敗を想定した堅牢なコードを書く |
 | 05 | 入出力とリソース管理 | [lessons/05-io.md](lessons/05-io.md) | [samples/05-io](samples/05-io) | ファイル I/O・try-with-resources・Logger |
 | 06 | ラムダと Stream API | [lessons/06-streams.md](lessons/06-streams.md) | [samples/06-streams](samples/06-streams) | 宣言的なデータ処理を書く |
@@ -64,8 +65,9 @@ java com.example.exceptions.ExceptionDemo
 ```text
 java/
 ├── README.md                 # 本ファイル（ロードマップ）
-├── lessons/                  # 教材（Markdown）01〜11
+├── lessons/                  # 教材（Markdown）00〜12
 └── samples/                  # 各章の Java サンプル
+    ├── 00-runtime/
     ├── 01-basics/
     ├── 02-oop/
     ├── ...
@@ -82,4 +84,4 @@ java/
 
 ---
 
-次のステップ: [01. 基礎文法](lessons/01-basics.md)
+次のステップ: [00. Java の実行の仕組み](lessons/00-runtime.md)

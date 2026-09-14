@@ -5,6 +5,9 @@
 java/samples/**/out/
 java/samples/**/tasks-data/
 
+# Docker local env
+docker/.env
+
 # Log file
 *.log
 
