@@ -2,22 +2,36 @@
 
 ## 目次
 
-- [この章の目標](#この章の目標)
-- [なぜ大事か](#なぜ大事か)
-- [学習ポイント](#学習ポイント)
-  - [1. 配列と多次元配列](#1-配列と多次元配列)
-  - [2. 主なコレクション](#2-主なコレクション)
-  - [3. 要素の取り出し方：ベストプラクティス](#3-要素の取り出し方ベストプラクティス)
-  - [4. ジェネリクス](#4-ジェネリクス)
-  - [5. 反復処理と不変コレクション](#5-反復処理と不変コレクション)
-- [サンプル一覧](#サンプル一覧)
-- [章末課題](#章末課題)
-- [チェックリスト](#チェックリスト)
-- [次の章](#次の章)
+- [03. コレクションとジェネリクス](#03-コレクションとジェネリクス)
+  - [目次](#目次)
+  - [この章の目標](#この章の目標)
+  - [なぜ大事か](#なぜ大事か)
+  - [学習ポイント](#学習ポイント)
+    - [1. 配列と多次元配列](#1-配列と多次元配列)
+      - [一次元配列](#一次元配列)
+      - [多次元配列（ジャグ配列）](#多次元配列ジャグ配列)
+      - [配列を選ぶとき / 選ばないとき](#配列を選ぶとき--選ばないとき)
+    - [2. 主なコレクション](#2-主なコレクション)
+    - [3. 要素の取り出し方：ベストプラクティス](#3-要素の取り出し方ベストプラクティス)
+      - [配列](#配列)
+      - [List](#list)
+      - [Set](#set)
+      - [Map](#map)
+    - [4. Iterator](#4-iterator)
+      - [基本形](#基本形)
+      - [配列と Iterator](#配列と-iterator)
+      - [ListIterator（参考）](#listiterator参考)
+    - [5. ジェネリクス](#5-ジェネリクス)
+    - [6. 反復処理と不変コレクション](#6-反復処理と不変コレクション)
+  - [サンプル一覧](#サンプル一覧)
+  - [章末課題](#章末課題)
+  - [チェックリスト](#チェックリスト)
+  - [次の章](#次の章)
 
 ## この章の目標
 
 - 配列（一次元・多次元）とコレクションの違いを説明できる
+- `Iterator` / `Enumeration` で要素を辿れる（レガシーコード含む）
 - `List` / `Set` / `Map` の使い分けができる
 - 各データ構造からの要素取り出しのベストプラクティスを実践できる
 - ジェネリクスで型安全なコレクションを扱える
@@ -190,7 +204,79 @@ scores.forEach((name, score) -> System.out.println(name + "=" + score));
 
 `map.get(key)` の結果を即 unbox（`int x = map.get(key);`）すると、キー欠落時に NPE になります。`getOrDefault` や存在確認を使います。
 
-### 4. ジェネリクス
+### 4. Iterator
+
+`Iterator` は「次の要素があるか？」と「次を取り出す」を分離したカーソルです。  
+拡張 for（`for (T x : list)`）の内側でも、多くの場合 Iterator が使われています。
+
+配列そのものに `iterator()` はありません。次のいずれかで辿ります。
+
+| 対象 | やり方 |
+|------|--------|
+| 配列 | インデックス for / 拡張 for。Iterator が必要なら `Arrays.asList(array).iterator()`（**参照型配列**向け。`int[]` は `List<int[]>` になるので注意） |
+| `List` / `Set` | `iterator()`、または拡張 for |
+| 古い `Vector` / `Hashtable` | `Enumeration`（レガシー）または `Iterator` |
+
+#### 基本形
+
+```java
+List<String> names = new ArrayList<>();
+names.add("Ada");
+names.add("Alan");
+
+Iterator<String> it = names.iterator();
+while (it.hasNext()) {
+    String name = it.next();
+    System.out.println(name);
+}
+```
+
+| メソッド | 意味 |
+|----------|------|
+| `hasNext()` | まだ要素があるか |
+| `next()` | 次の要素を返す。無いのに呼ぶと `NoSuchElementException` |
+| `remove()` | **いま `next()` した要素**を削除する。拡張 for 中の `list.remove` より安全 |
+
+ループ中にコレクションを構造変更する定石が、この `Iterator.remove()` です。
+
+```java
+Iterator<String> it = names.iterator();
+while (it.hasNext()) {
+    if (it.next().startsWith("A")) {
+        it.remove();
+    }
+}
+```
+
+拡張 for の最中に `names.remove(...)` すると `ConcurrentModificationException` になりやすいです。
+
+#### 配列と Iterator
+
+```java
+String[] words = {"red", "green", "blue"};
+Iterator<String> it = Arrays.asList(words).iterator();
+while (it.hasNext()) {
+    System.out.println(it.next());
+}
+```
+
+`int[]` のようなプリミティブ配列は `Arrays.asList` すると「配列1本が要素の List」になるため、Iterator 化の用途には向きません。プリミティブはインデックス for か拡張 for を使います。
+
+
+| | Iterator | Enumeration |
+|--|----------|-------------|
+| 登場 | Collections Framework（Java 2）以降の標準 | さらに古い API |
+| 進む | `hasNext` / `next` | `hasMoreElements` / `nextElement` |
+| 削除 | `remove()` あり | 削除メソッドなし |
+| 新規コード | こちらを使う | 新規では使わない。読めて書き換えられること |
+
+`Hashtable` の `keys()` / `elements()` も `Enumeration` を返します。移行するなら `HashMap` + `Iterator` / 拡張 for です。
+
+#### ListIterator（参考）
+
+`List` 専用で、双方向に進めたり、カーソル位置に挿入できます。双方向リストやエディタ的な走査で使います。通常の一方向走査は `Iterator` で十分です。
+
+### 5. ジェネリクス
 
 ```java
 List<String> names = new ArrayList<>();
@@ -200,7 +286,7 @@ Map<String, Integer> scores = new HashMap<>();
 `<String>` により、誤って `Integer` を入れるコンパイルエラーを防げます。  
 生の型（`List` だけ）はレガシー互換用で、新規コードでは使いません。
 
-### 5. 反復処理と不変コレクション
+### 6. 反復処理と不変コレクション
 
 ```java
 for (String name : names) {
@@ -217,6 +303,7 @@ List<String> fixed = List.of("a", "b"); // 変更不可
 | ファイル | 内容 |
 |----------|------|
 | `ArrayDemo.java` | 一次元・多次元配列と取り出し |
+| `IteratorDemo.java` | Iterator / Enumeration / ループ中の削除 |
 | `ListDemo.java` | List の基本操作 |
 | `SetAndMapDemo.java` | Set / Map の使い分け |
 | `GenericBox.java` / `GenericDemo.java` | 自作ジェネリッククラス |
@@ -227,11 +314,14 @@ List<String> fixed = List.of("a", "b"); // 変更不可
 2. 単語リストから重複を除いた `Set` を作り、件数を表示する
 3. `Pair<A, B>` ジェネリッククラスを自作する
 4. 3x3 の二次元配列で九九の一部を作り、拡張 for とインデックス for の両方で表示する
+5. `Iterator` で List から特定の要素を削除する。拡張 for 中の `remove` と比較して例外の有無を確認する
 
 ## チェックリスト
 
 - [ ] 配列と List の使い分けを説明できる
 - [ ] 多次元配列（配列の配列）として要素にアクセスできる
+- [ ] `hasNext` / `next` / `remove` の役割を説明できる
+- [ ] `Enumeration` を見たら Iterator 相当だと判断できる
 - [ ] List / Set / Map それぞれで「推奨の取り出し方」を選べる
 - [ ] 生の型を避け、`<T>` を付けられる
 

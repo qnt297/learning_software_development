@@ -7,15 +7,16 @@
 - [学習ポイント](#学習ポイント)
   - [1. SOLID（入口）](#1-solid入口)
   - [2. 疎結合と密結合](#2-疎結合と密結合)
-  - [3. DRY（Don't Repeat Yourself）](#3-drydont-repeat-yourself)
-  - [4. 車輪の再発明（と、その逆）](#4-車輪の再発明とその逆)
-  - [5. その他の多角的な観点](#5-その他の多角的な観点)
-  - [6. GoF デザインパターンとは](#6-gof-デザインパターンとは)
-  - [7. Strategy パターン（GoF・振る舞い）](#7-strategy-パターンgof振る舞い)
-  - [8. Factory Method パターン（GoF・生成）](#8-factory-method-パターンgof生成)
-  - [9. Decorator パターン（GoF・構造）](#9-decorator-パターンgof構造)
-  - [10. Repository の考え方](#10-repository-の考え方)
-  - [11. 設計レビューの問い](#11-設計レビューの問い)
+  - [3. 依存性注入（DI）](#3-依存性注入di)
+  - [4. DRY（Don't Repeat Yourself）](#4-drydont-repeat-yourself)
+  - [5. 車輪の再発明（と、その逆）](#5-車輪の再発明とその逆)
+  - [6. その他の多角的な観点](#6-その他の多角的な観点)
+  - [7. GoF デザインパターンとは](#7-gof-デザインパターンとは)
+  - [8. Strategy パターン（GoF・振る舞い）](#8-strategy-パターンgof振る舞い)
+  - [9. Factory Method パターン（GoF・生成）](#9-factory-method-パターンgof生成)
+  - [10. Decorator パターン（GoF・構造）](#10-decorator-パターンgof構造)
+  - [11. Repository の考え方](#11-repository-の考え方)
+  - [12. 設計レビューの問い](#12-設計レビューの問い)
 - [サンプル一覧](#サンプル一覧)
 - [章末課題](#章末課題)
 - [チェックリスト](#チェックリスト)
@@ -27,6 +28,7 @@
 - 疎結合・密結合、DRY、再利用と車輪の再発明など、多角的な設計観点を持つ
 - GoF デザインパターンの分類と代表例を説明できる
 - Strategy / Factory Method / Decorator / Repository の考え方を知る
+- 依存性注入（DI）と IoC の入口を説明できる
 - GoF 全23パターンを参考カタログとして概観できる
 - 「動くコード」から「変えやすいコード」へ意識を移す
 
@@ -78,9 +80,125 @@ class CheckoutService {
 ```
 
 完全な「結合ゼロ」は不可能です。目指すのは、**変わる可能性の高い部分との結合を薄くする** ことです。  
-サンプルの Strategy / Repository は、まさに疎結合のためのパターンです。
+サンプルの Strategy / Repository は、まさに疎結合のためのパターンです。  
+次節の **依存性注入** は、その疎結合をコードの組み立て方として定着させる技法です。
 
-### 3. DRY（Don't Repeat Yourself）
+### 3. 依存性注入（DI）
+
+**Dependency Injection（依存性注入）** は、「自分が使う部品を、自分で `new` しない。外から渡してもらう」という組み立て方です。
+
+#### 事前に押さえておく知識
+
+DI は新しい文法ではなく、ここまでの組み合わせです。足りなければ先に戻ってください。
+
+| 事前知識 | どこで学んだか | DI での役割 |
+|----------|----------------|-------------|
+| クラスとインスタンス | [02](02-oop.md) | 「使う側」と「使われる部品」が別オブジェクト |
+| インターフェイス（契約） | [02](02-oop.md) | 渡す型を具象ではなく抽象にする |
+| コンストラクタ | [02](02-oop.md) | 生成時に部品を受け取る口（注入点） |
+| カプセル化 | [02](02-oop.md) | 受け取った依存はフィールドに保持する |
+| ポリモーフィズム | [02](02-oop.md) | 渡された実装の `calculate` などが実行時に切り替わる |
+| 疎結合 / 密結合 | 本章 2 | なぜ `new` を内側に書かないか |
+| 依存性逆転（SOLID の D） | 本章 1 | 具象クラスではなく抽象に依存する |
+| Strategy | 本章後半 | 「アルゴリズムを渡す」は DI の典型例 |
+
+**IoC（Inversion of Control / 制御の反転）** もセットで出ます。
+
+| 用語 | 意味 |
+|------|------|
+| 普通の流れ | `OrderService` が自分で `new FileTaskRepository()` して使う。**使う側が、作る責任も持つ** |
+| IoC | 「いつ・どの実装を作るか」を外側（`main` や Spring コンテナ）が決める。使う側は受け取って使うだけ |
+| DI | IoC を実現する代表手段。**依存オブジェクトを外から注入する** |
+
+Spring の「IoC コンテナ」は、この配線を自動でやる箱です（[11 章](11-java-se-ee-and-spring.md)）。仕組みの本質は素の Java のコンストラクタ渡しと同じです。
+
+#### 何が「依存」か
+
+```text
+CheckoutService  ──使う──►  ShippingFeePolicy
+     使う側                      依存（部品）
+```
+
+`CheckoutService` が送料計算なしでは仕事できない、という関係が **依存** です。  
+問題は「その部品を **誰が new するか**」です。
+
+#### 注入しない場合（密結合）
+
+```java
+class CheckoutService {
+    private final ShippingFeePolicy shipping = new WeightShipping(200);
+}
+```
+
+- 送料ルールを変えるたびに `CheckoutService` を書き換える
+- テストで「送料ゼロ」の偽物に差し替えにくい
+- `CheckoutService` が具象クラスの名前まで知っている
+
+#### コンストラクタ注入（推奨）
+
+```java
+class CheckoutService {
+    private final ShippingFeePolicy shipping;
+
+    CheckoutService(ShippingFeePolicy shipping) { // ここが注入点
+        this.shipping = shipping;
+    }
+}
+
+// 組み立ては外側（main / テスト / Spring）
+CheckoutService checkout = new CheckoutService(new FlatShipping(500));
+```
+
+```text
+[外側]  FlatShipping を new
+   │
+   │  コンストラクタ引数として渡す  ← 注入
+   ▼
+CheckoutService はインターフェースだけ知っている
+   │
+   ▼
+shipping.calculate(...)  ← 実行時は FlatShipping の実装が動く
+```
+
+サンプルの `DesignDemo` / `DependencyInjectionDemo` がこの形です。
+
+#### 注入の種類
+
+| 種類 | 書き方 | 向き |
+|------|--------|------|
+| **コンストラクタ注入** | 生成時に必須依存を渡す | 推奨。`final` にでき、作り損ないをコンパイル／起動で検知しやすい |
+| **セッター注入** | `setXxx` で後から渡す | 任意の依存向き。必須が未設定のまま動きうる |
+| **フィールド注入** | `@Autowired` をフィールドに直接 | Spring では短いが、テストと不変性が弱くなりやすい |
+
+素の Java で学ぶなら、**コンストラクタ注入だけ** で十分です。
+
+#### 何が嬉しいか
+
+- **差し替え**: 本番はファイル保存、テストはメモリ保存、を呼び出し側の組み立てだけで切替
+- **テスト**: 偽物（モック）を渡して、DB なしでサービスを検証できる
+- **単一責任**: サービスは「業務」、生成と配線は `main` やコンテナの仕事
+
+#### Spring とのつながり（予告）
+
+```java
+@Service
+public class OrderService {
+    public OrderService(OrderRepository repository) { ... }
+}
+```
+
+ここで引数に書いているのが DI です。Spring が `OrderRepository` の実装を探し、コンストラクタに渡します。  
+`@Service` は「このクラスをコンテナに乗せる」印であり、DI そのものではありません。
+
+自前で DI コンテナを作る必要はありません（車輪の再発明）。まずは手動のコンストラクタ渡しを手で書いてから、Spring に任せると腹落ちします。
+
+依存が関数型インタフェース（メソッド1つ）なら、実装クラスの代わりに **ラムダを注入** することもできます（06 章）。テストで「送料ゼロ」をその場に書く、といった使い方です。
+
+```java
+new CheckoutService(weight -> 0);
+```
+
+### 4. DRY（Don't Repeat Yourself）
 
 「同じ知識を、複数箇所に重複して書かない」原則です。
 
@@ -95,7 +213,7 @@ class CheckoutService {
 
 指針: **重複しているのはコードか、それとも「知識・ルール」か？** ルールの重複を解消する。
 
-### 4. 車輪の再発明（と、その逆）
+### 5. 車輪の再発明（と、その逆）
 
 **車輪の再発明** とは、既に十分よいライブラリや言語機能があるのに、同等のものを自作してしまうことです。
 
@@ -120,7 +238,7 @@ class CheckoutService {
 ライブラリを足すたびに、版冲突・脆弱性対応・学習コストが増えます。  
 「再発明するな」と「何でも依存追加」は両立しません。**標準ライブラリ → 実績ある小依存 → 自作** の順で検討するのが実務的です。
 
-### 5. その他の多角的な観点
+### 6. その他の多角的な観点
 
 | 観点 | 問い |
 |------|------|
@@ -136,7 +254,7 @@ class CheckoutService {
 これらはしばしば衝突します（例: 抽象化で疎結合にする ↔ YAGNI／KISS）。  
 設計レビューでは「どれを優先するか」をチームで合意することが重要です。
 
-### 6. GoF デザインパターンとは
+### 7. GoF デザインパターンとは
 
 **GoF（Gang of Four）** は、書籍 *Design Patterns: Elements of Reusable Object-Oriented Software*（1994）の著者4名を指します。  
 そこで整理された **23 のデザインパターン** は、OOP における「再利用可能な設計の型紙」の古典です。
@@ -257,7 +375,7 @@ class CheckoutService {
 
 **原則（SOLID / 疎結合 / YAGNI）を先に**、パターンはその具体化手段、という順番が安全です。
 
-### 7. Strategy パターン（GoF・振る舞い）
+### 8. Strategy パターン（GoF・振る舞い）
 
 アルゴリズムを差し替え可能にします。
 
@@ -269,7 +387,7 @@ public interface ShippingFeePolicy {
 
 if 分岐で送料種別を増やし続ける代わりに、実装クラスを追加します（開放閉鎖の実践）。
 
-### 8. Factory Method パターン（GoF・生成）
+### 9. Factory Method パターン（GoF・生成）
 
 「どれを `new` するか」を呼び出し側から切り離します。
 
@@ -280,7 +398,7 @@ notifier.send("hello");
 
 呼び出し側は具象クラス名を知らなくてよく、生成ルールの変更が Factory に閉じます。
 
-### 9. Decorator パターン（GoF・構造）
+### 10. Decorator パターン（GoF・構造）
 
 同じインターフェイスでラップし、責務を重ねます。
 
@@ -293,7 +411,7 @@ notifier.send("hello");
 
 継承で `EmailWithPrefixAndUpperCaseNotifier` のように組み合わせ爆発させる代わりに、ラップの順序で機能を足せます。
 
-### 10. Repository の考え方
+### 11. Repository の考え方
 
 ドメインは「保存の詳細」を知りません。抽象に依存します。  
 （GoF そのものではありませんが、エンタープライズで頻出のパターンで、疎結合の実践です。）
@@ -307,7 +425,7 @@ public interface TaskRepository {
 
 実装（メモリ / ファイル / DB）は差し替え可能です。これが疎結合とテスタビリティに直結します。
 
-### 11. 設計レビューの問い
+### 12. 設計レビューの問い
 
 - このクラスは何の専門家か？（単一責任）
 - 変更理由は何種類あるか？
@@ -323,6 +441,7 @@ public interface TaskRepository {
 | ファイル | 内容 |
 |----------|------|
 | `ShippingFeePolicy.java` / `FlatShipping.java` / `WeightShipping.java` / `CheckoutService.java` / `DesignDemo.java` | Strategy |
+| `DependencyInjectionDemo.java` | コンストラクタ注入（DI） |
 | `Notifier.java` / `EmailNotifier.java` / `SlackNotifier.java` / `NotifierFactory.java` / `FactoryMethodDemo.java` | Factory Method |
 | `PrefixDecorator.java` / `UpperCaseDecorator.java` / `DecoratorDemo.java` | Decorator |
 
@@ -335,6 +454,7 @@ public interface TaskRepository {
 5. 「DRY しすぎて失敗した例」または「車輪の再発明をした例」を1つ挙げ、どうすべきだったか書く
 6. GoF の 3 分類から、いまの仕事／学習で使えそうなパターンを1つ選び、適用前後を短く比較する
 7. `NotifierFactory` に新しいチャネルを1つ追加する（呼び出し側の変更が最小になることを確認）
+8. `CheckoutService` の中で `new WeightShipping` する版を書き、DI 版と比べてテスト時の差し替えがどう違うか説明する
 
 ## チェックリスト
 
@@ -342,6 +462,9 @@ public interface TaskRepository {
 - [ ] GoF の生成／構造／振る舞いの違いを説明できる
 - [ ] Factory Method と Decorator の目的を一例で説明できる
 - [ ] 疎結合 / 密結合を具体コードで説明できる
+- [ ] DI は「使う部品を外から渡す」ことだと説明できる
+- [ ] IoC と DI の関係を一言で言える
+- [ ] コンストラクタ注入を自分で書ける
 - [ ] DRY と「過剰な共通化」の違いを説明できる
 - [ ] 車輪の再発明と、依存追加のトレードオフを説明できる
 - [ ] GoF 全23の分類（生成／構造／振る舞い）を説明できる
